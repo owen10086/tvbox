@@ -4,7 +4,7 @@ import sys
 sys.path.append('..')
 from base.spider import Spider
 import json
-
+import re
 
 class Spider(Spider):  # 元类 默认的元类 type
     def getName(self):
@@ -23,32 +23,8 @@ class Spider(Spider):  # 元类 默认的元类 type
     def homeContent(self, filter):
         result = {}
         cateManual = {
-              "🔮嗨翻":"https://pan.hikerfans.com",
-              "🦀9T(Adult)":"https://drive.9t.ee",
-              "🐱梓澪の妙妙屋":"https://xn--i0v44m.xyz",
-              "🚆资源小站":"https://pan.142856.xyz",
-              "🌤晴园的宝藏库":"https://alist.52qy.repl.co",
-              "🐭米奇妙妙屋":"https://anime.mqmmw.ga",
-              "💂小兵组网盘影视":"https://6vv.app",
-              "📀小光盘":"https://alist.xiaoguanxiaocheng.life",
-              "🐋一只鱼":"https://alist.youte.ml",
-              "🌊七米蓝":"https://al.chirmyram.com", 
-              "🌴非盘":"http://www.feifwp.top",
-              "🥼帅盘":"https://hi.shuaipeng.wang",
-              "🐉神族九帝":"https://alist.shenzjd.com",
-              "☃姬路白雪":"https://pan.jlbx.xyz",
-              "🎧听闻网盘":"https://wangpan.sangxuesheng.com",
-              "💾DISK":"http://124.222.140.243:8080",
-              "🌨云播放":"https://quanzi.laoxianghuijia.cn",
-              "✨星梦":"https://pan.bashroot.top",
-              "🌊小江":"https://dyj.me",
-              "💫触光":"https://pan.ichuguang.com",
-              "🕵好汉吧":"https://8023.haohanba.cn",
-              "🥗AUNEY":"http://121.227.25.116:8008",
-              "🎡资源小站":"https://960303.xyz/",
-              "🐝神器云": "https://quanzi.laoxianghuijia.cn",
-              "🏝fenwe":"http://www.fenwe.tk:5244",
-              "🎢轻弹浅唱":"https://g.xiang.lol"
+            "七米蓝": "https://al.chirmyram.com",
+            "姬路白雪の资源小站": "https://pan.jlbx.xyz"
         }
         classes = []
         for k in cateManual:
@@ -70,29 +46,52 @@ class Spider(Spider):  # 元类 默认的元类 type
 
     def categoryContent(self, tid, pg, filter, extend):
         result = {}
-        ulen = len(self.config['url'])
-        pat = tid[ulen:] + '/'
+        num = tid.count('/')
+        if num ==2:
+            tid = tid + '/'
+        url = re.findall(r"http.*://.*?/", tid)[0]
+        pat = tid.replace(url,"")
+        ifver = 'ver' in locals().keys()
+        if ifver is False:
+            param = {
+                "path": '/'
+            }
+            ver = self.fetch(url + 'api/public/settings', param)
+            vjo = json.loads(ver.text)['data']
+            if type(vjo) is dict:
+                ver = 3
+            else:
+                ver = 2
         param = {
-            "path": pat
+            "path": '/' + pat
         }
-        rsp = self.postJson(self.config['url'] + '/api/fs/list', param)
-        jo = json.loads(rsp.text)
+        if ver == 2:
+            rsp = self.postJson(url + 'api/public/path', param)
+            jo = json.loads(rsp.text)
+            vodList = jo['data']['files']
+        else:
+            rsp = self.postJson(url + 'api/fs/list', param)
+            jo = json.loads(rsp.text)
+            vodList = jo['data']['content']
         videos = []
-        vodList = jo['data']['content']
         for vod in vodList:
-            img = vod['thumb']
+            if ver == 2:
+                img = vod['thumbnail']
+            else:
+                img = vod['thumb']
             if len(img) == 0:
                 if vod['type'] == 1:
                     img = "http://img1.3png.com/281e284a670865a71d91515866552b5f172b.png"
-            aid = pat
+            if pat != '':
+                aid = pat + '/'
+            else:
+                aid = pat
             tag = "file"
             remark = "文件"
             if vod['type'] == 1:
                 tag = "folder"
                 remark = "文件夹"
-                aid = self.config['url'] + aid + vod['name']
-            else:
-                aid = aid + vod['name']
+            aid = url + aid + vod['name']
             videos.append({
                 "vod_id":  aid,
                 "vod_name": vod['name'],
@@ -108,21 +107,42 @@ class Spider(Spider):  # 元类 默认的元类 type
         return result
 
     def detailContent(self, array):
-        fileName = array[0]
+        id = array[0]
+        url = re.findall(r"http.*://.*?/", id)[0]
+        ifver = 'ver' in locals().keys()
+        if ifver is False:
+            param = {
+                "path": '/'
+            }
+            ver = self.fetch(url + 'api/public/settings', param)
+            vjo = json.loads(ver.text)['data']
+            if type(vjo) is dict:
+                ver = 3
+            else:
+                ver = 2
+        fileName = id.replace(url, "")
         param = {
-            "path": fileName,
+            "path": '/' + fileName,
             "password": "",
             "page_num": 1,
             "page_size": 100
         }
-        rsp = self.postJson(self.config['url'] + '/api/fs/get', param)
-        jo = json.loads(rsp.text)
-        videos = []
-        vodList = jo['data']
-        url = vodList['raw_url']
-        vId = self.config['url'] + fileName
+        if ver == 2:
+            rsp = self.postJson(url + 'api/public/path', param)
+            jo = json.loads(rsp.text)
+            vodList = jo['data']['files'][0]
+        else:
+            rsp = self.postJson(url + 'api/fs/get', param)
+            jo = json.loads(rsp.text)
+            vodList = jo['data']
+        if ver == 2:
+            url = vodList['url']
+            pic = vodList['thumbnail']
+        else:
+            url = vodList['raw_url']
+            pic = vodList['thumb']
+        vId = url + fileName
         name = vodList['name']
-        pic = vodList['thumb']
         tag = "file"
         if vodList['type'] == 1:
             tag = "folder"
@@ -157,8 +177,7 @@ class Spider(Spider):  # 元类 默认的元类 type
 
     config = {
         "player": {},
-        "filter": {},
-        "url": 'https://al.chirmyram.com'
+        "filter": {}
     }
     header = {}
 
